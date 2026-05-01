@@ -1,0 +1,19 @@
+{
+  "tier1": "BUILD",
+  "tier2": null,
+  "raw": "build memory MCP server, use immediately in Claude Code. No landing, no SaaS, just working MCP.",
+  "mode": "safe",
+  "branch_loaded": "branches/build.md",
+  "case": "new-from-prose",
+  "category": "other",
+  "scope": "MCP-server-only",
+  "product_summary": {
+    "what": "Local-first MCP memory server. Install once, plug into Claude Code via `claude mcp add`, agent has persistent memory.",
+    "stack_choice": "TypeScript + @modelcontextprotocol/sdk + better-sqlite3 + sqlite-vec + @xenova/transformers (local embed, no API key needed)",
+    "transport": "stdio (Claude Code default)",
+    "storage_path": "~/.taw-mem/memory.db",
+    "tools_v1": ["remember", "recall", "forget", "list_recent", "get"],
+    "differentiators_v1": ["hybrid search FTS5+vector", "auto-tag via regex"],
+    "deferred_v2": ["tree-sitter AST", "git auto-import", "session auto-summary", "cloud sync"]
+  }
+}
