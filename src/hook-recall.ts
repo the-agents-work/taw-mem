@@ -13,11 +13,59 @@ import { existsSync } from "node:fs";
 
 const DB_PATH = process.env.TAW_MEM_DB ?? join(homedir(), ".taw-mem", "memory.db");
 const MIN_PROMPT_WORDS = 4;
+const MIN_MEANINGFUL_TOKENS = 3;
+const TOKEN_MIN_LEN = 4;
 const MAX_RESULTS = 3;
 const SNIPPET_LEN = 220;
-// sqlite FTS5 bm25 rank: more negative = better. -0.5 is a soft floor;
-// real matches usually score < -1.0. Tune via TAW_MEM_HOOK_THRESHOLD env.
-const RANK_THRESHOLD = Number(process.env.TAW_MEM_HOOK_THRESHOLD ?? -0.5);
+// sqlite FTS5 bm25 rank: more negative = better. -1.0 = decent match,
+// -2.0 = strong. Tune via TAW_MEM_HOOK_THRESHOLD env.
+const RANK_THRESHOLD = Number(process.env.TAW_MEM_HOOK_THRESHOLD ?? -1.0);
+
+// Common VN + EN stopwords (diacritics already stripped). These get filtered
+// out before FTS so prompts like "khi nào nó query" don't trigger noise hits
+// just because "khi" or "nao" overlap memory content.
+const STOPWORDS = new Set([
+  // VN
+  "la", "co", "khong", "duoc", "the", "sao", "nhi", "lai", "cai", "nay", "do",
+  "kia", "thi", "ma", "va", "hay", "hoac", "voi", "cho", "de", "neu", "vi",
+  "da", "dang", "se", "tu", "den", "trong", "ngoai", "tren", "duoi", "ben",
+  "cung", "mot", "hai", "ba", "cac", "nhung", "moi", "tat", "ca", "gi", "ai",
+  "dau", "nao", "bang", "qua", "toi", "chi", "nua", "roi", "con", "lam",
+  "len", "xuong", "ra", "vao", "tao", "tom", "lay", "biet", "thay", "thoi",
+  "luc", "khi", "tien", "quan", "phai", "muon", "can", "rang", "nen", "biet",
+  "minh", "anh", "chi", "ong", "han", "tao", "chung", "boi", "qua", "lai",
+  "ban", "bro", "duoi", "ngoai", "rat", "qua", "kha",
+  // EN
+  "the", "and", "but", "for", "are", "was", "were", "been", "have", "has",
+  "had", "does", "did", "will", "would", "can", "could", "should", "may",
+  "might", "must", "shall", "with", "about", "against", "between", "into",
+  "through", "during", "before", "after", "above", "below", "from", "down",
+  "over", "under", "again", "further", "then", "once", "here", "there",
+  "when", "where", "what", "which", "who", "whom", "this", "that", "these",
+  "those", "they", "them", "their", "your", "yours", "ours", "mine", "his",
+  "her", "hers", "its", "you", "him", "all", "any", "both", "each", "few",
+  "more", "most", "other", "some", "such", "nor", "not", "only", "own",
+  "same", "than", "too", "very", "just", "now", "out", "off", "still",
+  "while", "until", "because", "though", "although", "however",
+]);
+
+// If the prompt OPENS with one of these meta-question phrases, skip the
+// hook entirely — user is asking about the system, not asking the system to
+// recall something. Cheap heuristic; false negatives just mean "noisy hook
+// fires on a meta question" — annoying but not breaking.
+const META_QUESTION_PREFIXES = [
+  // VN
+  "khi nao", "lam sao", "lam the nao", "tai sao", "la gi", "nghia la",
+  "giai thich", "the nao", "vi sao", "co phai", "co nen", "co the",
+  "co bi", "co di", "no la", "tom lai", "y la", "tuc la", "co nghia",
+  // EN
+  "how do", "how to", "how does", "how can", "how should", "how is",
+  "what is", "what are", "what does", "what do", "what about",
+  "why does", "why is", "why do", "why are",
+  "when does", "when is", "when do",
+  "where is", "where do", "where does",
+  "explain", "tell me", "can you explain", "could you",
+];
 
 interface FtsHit {
   id: number;
@@ -42,11 +90,26 @@ function safeJsonParse(s: string): any {
   }
 }
 
+function stripDiacritics(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
 function tokenize(query: string): string[] {
   return query
     .split(/[^\p{L}\p{N}_]+/u)
     .map((t) => t.trim())
-    .filter((t) => t.length >= 3);
+    .filter((t) => t.length >= TOKEN_MIN_LEN);
+}
+
+function meaningfulTokens(raw: string[]): string[] {
+  // Drop stopwords; comparison done on diacritic-stripped lowercase form
+  // so "lại"/"Lai"/"lai" all hit the same stopword entry.
+  return raw.filter((t) => !STOPWORDS.has(stripDiacritics(t)));
+}
+
+function looksLikeMetaQuestion(prompt: string): boolean {
+  const norm = stripDiacritics(prompt.trim()).slice(0, 80);
+  return META_QUESTION_PREFIXES.some((p) => norm.startsWith(p));
 }
 
 function snippet(content: string, max: number): string {
@@ -73,10 +136,12 @@ async function main() {
   const wordCount = prompt.split(/\s+/).length;
   if (wordCount < MIN_PROMPT_WORDS) return;
 
+  if (looksLikeMetaQuestion(prompt)) return;
+
   if (!existsSync(DB_PATH)) return;
 
-  const tokens = tokenize(prompt);
-  if (tokens.length === 0) return;
+  const tokens = meaningfulTokens(tokenize(prompt));
+  if (tokens.length < MIN_MEANINGFUL_TOKENS) return;
 
   let db: Database.Database;
   try {
