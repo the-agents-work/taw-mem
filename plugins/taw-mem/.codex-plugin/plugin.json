@@ -21,7 +21,7 @@
   "interface": {
     "displayName": "taw-mem",
     "shortDescription": "Local-first memory for coding agents",
-    "longDescription": "Store, recall, audit, and compact project memory locally through a SQLite-backed MCP server. Designed for coding agents that need durable context without sending memory storage to a hosted service.",
+    "longDescription": "Store, recall, audit, and compact project memory locally through a SQLite-backed MCP server. Designed for coding agents that move between repos, VM/server sessions, reviews, setup/debug work, and continuation tasks without sending memory storage to a hosted service.",
     "developerName": "the-agents-work",
     "category": "Productivity",
     "capabilities": [
@@ -29,9 +29,9 @@
     ],
     "websiteURL": "https://github.com/the-agents-work/taw-mem",
     "defaultPrompt": [
-      "Set up local project memory with taw-mem",
-      "Recall prior context for this repo",
-      "Audit and compact local memories"
+      "Recall prior context for this repo before changing files",
+      "Save the root cause and verification after this fix",
+      "Audit and compact local memories for this project"
     ],
     "brandColor": "#0F766E"
   },
