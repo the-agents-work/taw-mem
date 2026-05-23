@@ -1,0 +1,39 @@
+{
+  "name": "taw-mem",
+  "version": "0.1.0",
+  "description": "Local-first persistent memory for Codex and MCP-compatible coding agents.",
+  "author": {
+    "name": "the-agents-work",
+    "url": "https://github.com/the-agents-work"
+  },
+  "homepage": "https://github.com/the-agents-work/taw-mem",
+  "repository": "https://github.com/the-agents-work/taw-mem",
+  "license": "MIT",
+  "keywords": [
+    "memory",
+    "mcp",
+    "codex",
+    "sqlite",
+    "local-first",
+    "coding-agents"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "taw-mem",
+    "shortDescription": "Local-first memory for coding agents",
+    "longDescription": "Store, recall, audit, and compact project memory locally through a SQLite-backed MCP server. Designed for coding agents that need durable context without sending memory storage to a hosted service.",
+    "developerName": "the-agents-work",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/the-agents-work/taw-mem",
+    "defaultPrompt": [
+      "Set up local project memory with taw-mem",
+      "Recall prior context for this repo",
+      "Audit and compact local memories"
+    ],
+    "brandColor": "#0F766E"
+  },
+  "mcpServers": "./.mcp.json"
+}

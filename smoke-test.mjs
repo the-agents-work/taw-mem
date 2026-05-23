@@ -1,5 +1,5 @@
 // Quick stdio JSON-RPC smoke test for the MCP server.
-// Spawns dist/server.js, runs initialize → tools/list → remember → recall → forget.
+// Spawns dist/server.js, runs initialize → tools/list → remember → recall → health → compact → forget.
 // Uses a TEMP db so it doesn't pollute ~/.taw-mem.
 
 import { spawn } from "node:child_process";
@@ -78,7 +78,7 @@ try {
   const list = await send("tools/list", {});
   const names = list.result.tools.map((t) => t.name);
   pretty("tools/list", names);
-  if (names.length !== 5) throw new Error(`expected 5 tools, got ${names.length}`);
+  if (names.length !== 7) throw new Error(`expected 7 tools, got ${names.length}`);
 
   // 3) remember 3 sample memories
   const samples = [
@@ -86,15 +86,18 @@ try {
       content:
         "Got CORS error when calling https://api.example.com/users from localhost:3000. Fixed by adding Access-Control-Allow-Origin header on the backend.",
       source: "claude-code",
+      project: "smoke-app",
     },
     {
       content:
         "```ts\nfunction debounce<T extends (...args: any[]) => unknown>(fn: T, ms: number) {\n  let t: NodeJS.Timeout;\n  return (...args: Parameters<T>) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };\n}\n```",
       source: "snippet",
+      project: "smoke-app",
     },
     {
       content: "TODO: add rate limiting to /api/auth/login — saw bot attempts in logs",
       source: "todo",
+      project: "smoke-app",
     },
   ];
 
@@ -112,7 +115,7 @@ try {
   // 4) recall — semantic
   const recall1 = await send("tools/call", {
     name: "recall",
-    arguments: { query: "browser cross origin policy", limit: 3 },
+    arguments: { query: "browser cross origin policy", project: "smoke-app", limit: 3 },
   });
   const r1 = JSON.parse(recall1.result.content[0].text);
   pretty("recall: 'browser cross origin policy'", r1.results.map((x) => ({ id: x.id, score: x._score, tags: x.tags, snippet: x.content.slice(0, 80) })));
@@ -124,7 +127,7 @@ try {
   // 5) recall — keyword
   const recall2 = await send("tools/call", {
     name: "recall",
-    arguments: { query: "rate limiting login", limit: 3 },
+    arguments: { query: "rate limiting login", project: "smoke-app", limit: 3 },
   });
   const r2 = JSON.parse(recall2.result.content[0].text);
   pretty("recall: 'rate limiting login'", r2.results.map((x) => ({ id: x.id, score: x._score, tags: x.tags, snippet: x.content.slice(0, 80) })));
@@ -132,7 +135,7 @@ try {
   // 6) recall with filter
   const recall3 = await send("tools/call", {
     name: "recall",
-    arguments: { query: "function", filter_tag: "code", limit: 3 },
+    arguments: { query: "function", project: "smoke-app", filter_tag: "code", limit: 3 },
   });
   const r3 = JSON.parse(recall3.result.content[0].text);
   pretty("recall filter_tag=code", r3.results.map((x) => ({ id: x.id, tags: x.tags, snippet: x.content.slice(0, 80) })));
@@ -142,7 +145,35 @@ try {
   const lrp = JSON.parse(lr.result.content[0].text);
   console.log(`\n=== list_recent ===\ntotal=${lrp.total} returned=${lrp.count}`);
 
-  // 8) forget
+  // 8) memory_health
+  const health = await send("tools/call", {
+    name: "memory_health",
+    arguments: { project: "smoke-app" },
+  });
+  const hp = JSON.parse(health.result.content[0].text);
+  pretty("memory_health", hp.health);
+  if (!hp.ok || hp.health.total < 3) throw new Error("memory_health returned unexpected result");
+
+  // 9) compact_project dry run
+  const compact = await send("tools/call", {
+    name: "compact_project",
+    arguments: { project: "smoke-app", dry_run: true, max_memories: 3 },
+  });
+  const cp = JSON.parse(compact.result.content[0].text);
+  pretty("compact_project dry-run", cp);
+  if (!cp.ok || !cp.dry_run || !cp.summary) throw new Error("compact_project dry-run failed");
+
+  // 10) secret rejection
+  const secret = await send("tools/call", {
+    name: "remember",
+    arguments: {
+      content: "api_key = 'sk_test_abcdefghijklmnopqrstuvwxyz'",
+      project: "smoke-app",
+    },
+  });
+  if (!secret.result.isError) throw new Error("secret-like memory was not rejected");
+
+  // 11) forget
   const fg = await send("tools/call", { name: "forget", arguments: { id: ids[0] } });
   const fgp = JSON.parse(fg.result.content[0].text);
   pretty("forget", fgp);

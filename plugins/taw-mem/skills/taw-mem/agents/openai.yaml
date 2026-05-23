@@ -1,0 +1,4 @@
+interface:
+  display_name: "taw-mem"
+  short_description: "Use local-first project memory"
+  default_prompt: "Set up or use local-first persistent project memory with taw-mem."

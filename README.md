@@ -16,15 +16,17 @@ Existing memory tools (Mem0, Letta, Zep, Supermemory) are SaaS-first — your co
 
 ## What you get
 
-**5 MCP tools** (callable by any MCP client — Claude Code, Cline, Continue, etc.):
+**7 MCP tools** (callable by any MCP client — Codex, Claude Code, Cline, Continue, etc.):
 
 | Tool | Purpose |
 |---|---|
-| `remember(content, tags?, source?)` | Store text. Auto-embeds + auto-tags (code/error/url/todo/cmd). |
-| `recall(query, limit?, filter_tag?)` | Hybrid search (vector + FTS5) ranked via Reciprocal Rank Fusion (k=60). |
+| `remember(content, project?, tags?, source?)` | Store text. Auto-embeds + auto-tags (code/error/url/todo/cmd), dedupes, and rejects secret-like content. |
+| `recall(query, project?, limit?, filter_tag?)` | Hybrid search (vector + FTS5) ranked via Reciprocal Rank Fusion (k=60). |
 | `get(id)` | Fetch one memory by id. |
-| `list_recent(limit?)` | Newest first. |
+| `list_recent(limit?, project?)` | Newest first. |
 | `forget(id)` | Permanent delete. |
+| `memory_health(project?)` | Audit duplicate, stale, noisy, secret-like, and project-casing issues. |
+| `compact_project(project, dry_run?, replace_originals?)` | Summarize many project memories and optionally supersede originals. |
 
 **Optional auto-recall hook** for Claude Code: every prompt you type gets a fast FTS keyword scan; if a relevant past memory exists, it's silently injected into the model's context. ~50 ms cold, silent on no-match. The model still calls `recall` when it wants semantic search — the hook is a safety net for "model forgot to query".
 
@@ -44,6 +46,27 @@ claude mcp add taw-mem --scope user -- node "$(pwd)/dist/server.js"
 ```
 
 Restart Claude Code session. Tools appear as `mcp__taw_mem__remember`, `mcp__taw_mem__recall`, etc.
+
+### Install as a Codex plugin
+
+This repo includes a Codex plugin wrapper:
+
+```
+plugins/taw-mem/
+├── .codex-plugin/plugin.json
+├── .mcp.json
+└── skills/taw-mem/SKILL.md
+```
+
+The plugin declares the local MCP server and a Codex skill that teaches the agent when to recall, remember, audit, and compact project memory.
+
+Register the repo as a local marketplace while developing:
+
+```bash
+codex plugin marketplace add "$(pwd)"
+```
+
+The plugin MCP entry uses `npx -y github:the-agents-work/taw-mem`, so GitHub installs run `npm run build` through the package `prepare` script before launching the `taw-mem` bin.
 
 ### Enable auto-recall hook (optional, Claude Code only)
 
@@ -83,7 +106,7 @@ remember(content)
    ├─ autoTag (regex: code/error/url/todo/cmd)
    ├─ embed via Xenova all-MiniLM-L6-v2 (384-d, local ONNX)
    └─ insert into:
-       ├─ memories                  (real table: id, content, tags, source, created_at)
+       ├─ memories                  (real table: id, content, project, tags, source, quality metadata)
        ├─ memories_vec  (vec0)      (384-d float vector)
        └─ memories_fts  (FTS5)      (unicode61, remove_diacritics=2)
 
@@ -118,7 +141,8 @@ The `dist/hook-recall.js` script opens this DB read-only. Concurrent reads are s
 
 **v0.2** — defer until usage signals priority
 - [ ] Daemon mode for hook → semantic search in <50 ms (today the hook skips embedding for speed)
-- [ ] Per-project filter (tag by `cwd` automatically)
+- [x] Per-project filter
+- [x] Memory health and compaction tools
 - [ ] Session summary auto-save (after N turns, save digest)
 
 **v0.3+**

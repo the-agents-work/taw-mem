@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "taw-mem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "github:the-agents-work/taw-mem"
+      ],
+      "note": "Runs the local-first taw-mem stdio MCP server. Data stays on this machine under ~/.taw-mem/memory.db unless TAW_MEM_DB is set."
+    }
+  }
+}
